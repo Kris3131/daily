@@ -2,7 +2,7 @@ name: ChatGPT Sprint Summary
 
 on:
   schedule:
-    - cron: '0 14 * * *'  # 每天 UTC 22:00 執行 
+    - cron: '0 14 * * *'  # 每天 UTC 14:00 (台灣時間 22:00)
   workflow_dispatch:  # 允許手動觸發
 
 jobs:
@@ -39,8 +39,22 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Create Sprint Summary Issue
+      - name: Save Summary as Markdown
         run: |
-          gh issue create --title "[Sprint 回顧] $(date +'%Y-%m-%d')" --body "${{ env.summary }}"
+          SUMMARY_FILE="sprint-summary-$(date +'%Y-%m-%d').md"
+          echo "## Sprint 回顧 - $(date +'%Y-%m-%d')" > $SUMMARY_FILE
+          echo "" >> $SUMMARY_FILE
+          echo "${{ env.summary }}" >> $SUMMARY_FILE
+          echo "Markdown file saved as $SUMMARY_FILE"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit and Push Report
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add sprint-summary-*.md
+          git commit -m "自動生成 Sprint 回顧報告 - $(date +'%Y-%m-%d')" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
