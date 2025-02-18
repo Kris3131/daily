@@ -17,24 +17,42 @@ jobs:
         id: fetch_issues
         run: |
           issues=$(gh issue list --state open --limit 5 --json title,body)
+          echo "Fetched Issues: $issues"
           echo "issues=$issues" >> $GITHUB_ENV
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Debug API Key
+        run: |
+          if [[ -z "${{ secrets.OPENAI_API_KEY }}" ]]; then
+            echo "❌ OPENAI_API_KEY 未設置，請檢查 GitHub Secrets"
+            exit 1
+          else
+            echo "✅ OPENAI_API_KEY 已設置"
+          fi
+
       - name: Send Issues to ChatGPT
         id: chatgpt_request
         run: |
+          JSON_DATA=$(jq -n --arg issues "${{ env.issues }}" \
+          '{"model": "gpt-4", "messages": [{"role": "system", "content": "請根據以下 GitHub Issues 總結 Sprint 進度並提供建議。"}, {"role": "user", "content": $issues}], "temperature": 0.7}')
+
+          echo "Sending JSON Data: $JSON_DATA"
+
           response=$(curl -s -X POST "https://api.openai.com/v1/chat/completions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
-            -d '{
-              "model": "gpt-4",
-              "messages": [{"role": "system", "content": "請根據以下的 GitHub Issues 內容，總結 Sprint 進度並提供回顧建議。"},
-                           {"role": "user", "content": "'"${{ env.issues }}"'"}],
-              "temperature": 0.7
-            }')
+            -d "$JSON_DATA")
 
-          summary=$(echo $response | jq -r '.choices[0].message.content')
+          echo "ChatGPT Response: $response"
+
+          summary=$(echo "$response" | jq -r '.choices[0].message.content // "⚠️ 無回應，請檢查 API Key 或 OpenAI 伺服器狀態"')
+
+          if [[ -z "$summary" ]]; then
+            echo "❌ OpenAI API 沒有返回內容"
+            exit 1
+          fi
+
           echo "summary=$summary" >> $GITHUB_ENV
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
