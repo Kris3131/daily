@@ -17,10 +17,11 @@ jobs:
         id: fetch_issues
         run: |
           issues=$(gh issue list --state open --limit 5 --json body | jq -r 'map(.body) | join("\n\n---\n\n")')
-          echo "Fetched Issues: $issues"
-          echo "issues<<EOF" >> $GITHUB_ENV
-          echo "$issues" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          echo "Fetched Issues:"
+          echo "$issues"
+
+          # 使用 base64 編碼來安全存儲多行環境變數
+          echo "issues=$(echo "$issues" | base64 -w 0)" >> $GITHUB_ENV
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -36,14 +37,15 @@ jobs:
       - name: Send Issues to ChatGPT
         id: chatgpt_request
         run: |
-          # 確保 issues 變數內容為純文字，並格式化 JSON
-          JSON_DATA=$(jq -n --arg issues "$env.issues" \
+          # 解碼 issues 變數
+          decoded_issues=$(echo "$env.issues" | base64 -d)
+
+          JSON_DATA=$(jq -n --arg issues "$decoded_issues" \
           '{"model": "gpt-4", "messages": [{"role": "system", "content": "請根據以下 GitHub Issues 總結 Sprint 進度並提供建議。"}, {"role": "user", "content": $issues}], "temperature": 0.7}')
 
           echo "Sending JSON Data:"
           echo "$JSON_DATA"
 
-          # 發送 API 請求
           response=$(curl -s -X POST "https://api.openai.com/v1/chat/completions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
@@ -52,26 +54,24 @@ jobs:
           echo "ChatGPT Response:"
           echo "$response"
 
-          # 解析 API 回應內容
-          summary=$(echo "$response" | jq -r '.choices[0].message.content // " 無回應，請檢查 API Key 或 OpenAI 伺服器狀態"')
+          summary=$(echo "$response" | jq -r '.choices[0].message.content // "無回應，請檢查 API Key 或 OpenAI 伺服器狀態"')
 
-          if [[ -z "$summary" || "$summary" == " 無回應，請檢查 API Key 或 OpenAI 伺服器狀態" ]]; then
+          if [[ -z "$summary" || "$summary" == "無回應，請檢查 API Key 或 OpenAI 伺服器狀態" ]]; then
             echo "OpenAI API 沒有返回內容，請檢查 API Key 或 OpenAI 伺服器狀態"
             exit 1
           fi
 
-          echo "summary<<EOF" >> $GITHUB_ENV
-          echo "$summary" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          echo "summary=$(echo "$summary" | base64 -w 0)" >> $GITHUB_ENV
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Save Summary as Markdown
         run: |
+          decoded_summary=$(echo "$env.summary" | base64 -d)
           SUMMARY_FILE="sprint-summary-$(date +'%Y-%m-%d').md"
           echo "## Sprint 回顧 - $(date +'%Y-%m-%d')" > $SUMMARY_FILE
           echo "" >> $SUMMARY_FILE
-          echo "${{ env.summary }}" >> $SUMMARY_FILE
+          echo "$decoded_summary" >> $SUMMARY_FILE
           echo "Markdown file saved as $SUMMARY_FILE"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
