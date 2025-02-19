@@ -3,7 +3,7 @@ name: ChatGPT Sprint Summary
 on:
   schedule:
     - cron: '0 14 * * *'  # 每天 UTC 14:00 (台灣時間 22:00)
-  workflow_dispatch:  # 允許手動觸發
+  workflow_dispatch: 
 
 jobs:
   generate_summary:
@@ -20,7 +20,6 @@ jobs:
           echo "Fetched Issues:"
           echo "$issues"
 
-          # 使用 base64 編碼來安全存儲多行環境變數
           echo "issues=$(echo "$issues" | base64 -w 0)" >> $GITHUB_ENV
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -37,8 +36,8 @@ jobs:
       - name: Send Issues to ChatGPT
         id: chatgpt_request
         run: |
-          # 解碼 issues 變數
-          decoded_issues=$(echo "$env.issues" | base64 -d)
+          # 解碼 issues
+          decoded_issues=$(echo "$issues" | base64 -d)
 
           JSON_DATA=$(jq -n --arg issues "$decoded_issues" \
           '{"model": "gpt-4", "messages": [{"role": "system", "content": "請根據以下 GitHub Issues 總結 Sprint 進度並提供建議。"}, {"role": "user", "content": $issues}], "temperature": 0.7}')
@@ -61,13 +60,15 @@ jobs:
             exit 1
           fi
 
+          # 使用 base64 來安全儲存
           echo "summary=$(echo "$summary" | base64 -w 0)" >> $GITHUB_ENV
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Save Summary as Markdown
         run: |
-          decoded_summary=$(echo "$env.summary" | base64 -d)
+          decoded_summary=$(echo "$summary" | base64 -d)
+
           SUMMARY_FILE="sprint-summary-$(date +'%Y-%m-%d').md"
           echo "## Sprint 回顧 - $(date +'%Y-%m-%d')" > $SUMMARY_FILE
           echo "" >> $SUMMARY_FILE
