@@ -18,7 +18,9 @@ jobs:
         run: |
           issues=$(gh issue list --state open --limit 5 --json body | jq -r 'map(.body) | join("\n\n---\n\n")')
           echo "Fetched Issues: $issues"
-          echo "issues=$issues" >> $GITHUB_ENV
+          echo "issues<<EOF" >> $GITHUB_ENV
+          echo "$issues" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -35,7 +37,7 @@ jobs:
         id: chatgpt_request
         run: |
           # 確保 issues 變數內容為純文字，並格式化 JSON
-          JSON_DATA=$(jq -n --arg issues "${{ env.issues }}" \
+          JSON_DATA=$(jq -n --arg issues "$env.issues" \
           '{"model": "gpt-4", "messages": [{"role": "system", "content": "請根據以下 GitHub Issues 總結 Sprint 進度並提供建議。"}, {"role": "user", "content": $issues}], "temperature": 0.7}')
 
           echo "Sending JSON Data:"
@@ -51,14 +53,16 @@ jobs:
           echo "$response"
 
           # 解析 API 回應內容
-          summary=$(echo "$response" | jq -r '.choices[0].message.content // "⚠️ 無回應，請檢查 API Key 或 OpenAI 伺服器狀態"')
+          summary=$(echo "$response" | jq -r '.choices[0].message.content // " 無回應，請檢查 API Key 或 OpenAI 伺服器狀態"')
 
-          if [[ -z "$summary" || "$summary" == "⚠️ 無回應，請檢查 API Key 或 OpenAI 伺服器狀態" ]]; then
+          if [[ -z "$summary" || "$summary" == " 無回應，請檢查 API Key 或 OpenAI 伺服器狀態" ]]; then
             echo "OpenAI API 沒有返回內容，請檢查 API Key 或 OpenAI 伺服器狀態"
             exit 1
           fi
 
-          echo "summary=$summary" >> $GITHUB_ENV
+          echo "summary<<EOF" >> $GITHUB_ENV
+          echo "$summary" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
