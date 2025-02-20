@@ -40,7 +40,7 @@ jobs:
           decoded_issues=$(echo "$issues" | base64 -d)
 
           JSON_DATA=$(jq -n --arg issues "$decoded_issues" \
-          '{"model": "gpt-4", "messages": [{"role": "system", "content": "請根據以下 GitHub Issues 總結 Sprint 進度並提供建議。"}, {"role": "user", "content": $issues}], "temperature": 0.7}')
+          '{"model": "gpt-4", "messages": [{"role": "system", "content": "請根據以下 GitHub Issues 總結 Sprint 進度並提供建議，請用個人視角給我建議，避免使用“我們”。"}, {"role": "user", "content": $issues}], "temperature": 0.7}')
 
           echo "Sending JSON Data:"
           echo "$JSON_DATA"
